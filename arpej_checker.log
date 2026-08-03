@@ -1,3 +1,5 @@
 # Historique des contrôles ARPEJ exécutés par GitHub Actions
 # Ce fichier est alimenté automatiquement après chaque exécution.
 2026-08-03 21:56:39,644 INFO Test envoyé via ntfy
+2026-08-03 21:58:18,999 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-08-03 21:58:19,002 INFO Contrôle réussi pour 8 résidences
