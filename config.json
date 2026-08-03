@@ -1,0 +1,34 @@
+{
+  "api_url": "https://www.arpej.fr/wp-json/sn/residences",
+  "city_ids": [
+    "52768",
+    "54167",
+    "52722",
+    "54157",
+    "52740",
+    "52782",
+    "53935"
+  ],
+  "expected_residence_ids": [
+    55486,
+    54165,
+    54768,
+    53932,
+    48916,
+    48835,
+    48643,
+    48598
+  ],
+  "request_timeout_seconds": 20,
+  "request_retries": 3,
+  "active_hours": {
+    "start": 8,
+    "end": 18
+  },
+  "data_directory": "data",
+  "secrets_file": "secrets.json",
+  "ntfy_topic_url_environment_variable": "ARPEJ_NTFY_TOPIC_URL",
+  "webhook_url_environment_variable": "ARPEJ_WEBHOOK_URL",
+  "telegram_bot_token_environment_variable": "ARPEJ_TELEGRAM_BOT_TOKEN",
+  "telegram_chat_id_environment_variable": "ARPEJ_TELEGRAM_CHAT_ID"
+}

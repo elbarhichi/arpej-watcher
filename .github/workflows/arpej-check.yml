@@ -1,0 +1,84 @@
+name: Surveillance ARPEJ
+
+on:
+  schedule:
+    - cron: "17 8-18 * * *"
+      timezone: "Europe/Paris"
+  workflow_dispatch:
+    inputs:
+      send_test_notification:
+        description: "Envoyer uniquement une notification ntfy de test"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arpej-availability-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Vérifier les disponibilités
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ARPEJ_NTFY_TOPIC_URL: ${{ secrets.ARPEJ_NTFY_TOPIC_URL }}
+      TZ: Europe/Paris
+
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Vérifier la présence du secret ntfy
+        shell: bash
+        run: |
+          if [ -z "${ARPEJ_NTFY_TOPIC_URL:-}" ]; then
+            echo "Le secret GitHub ARPEJ_NTFY_TOPIC_URL est absent."
+            exit 1
+          fi
+
+      - name: Envoyer la notification de test
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.send_test_notification }}
+        run: python arpej_checker.py --test-notification
+
+      - name: Contrôler les huit résidences
+        if: ${{ github.event_name == 'schedule' || !inputs.send_test_notification }}
+        run: python arpej_checker.py --force
+
+      - name: Publier le journal dans le dépôt
+        if: ${{ always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+        shell: bash
+        run: |
+          if [ ! -f data/arpej_checker.log ]; then
+            exit 0
+          fi
+
+          cat data/arpej_checker.log >> arpej_checker.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add arpej_checker.log
+
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+
+          git commit -m "Journal ARPEJ #${GITHUB_RUN_NUMBER}"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Conserver une copie téléchargeable du journal
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: arpej-checker-log-${{ github.run_id }}
+          path: data/arpej_checker.log
+          if-no-files-found: ignore
+          retention-days: 30
