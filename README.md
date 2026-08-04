@@ -123,8 +123,10 @@ Elle indique le nom exact de la résidence, la ville, le nombre de logements et 
 lien direct. Lorsqu'aucun logement n'est disponible, aucune notification distante
 n'est envoyée et cette décision est inscrite explicitement dans le journal.
 
-Le workflow GitHub utilise le fuseau `Europe/Paris` pour la planification et pour
-l'heure affichée dans les notifications.
+Le workflow GitHub utilise le fuseau `Europe/Paris` pour l'heure affichée et pour
+filtrer la plage active. Son cron couvre une plage UTC assez large pour fonctionner
+en heure d'été comme en heure d'hiver ; le checker ignore automatiquement le
+créneau extérieur et effectue les contrôles de 08h17 à 18h17, heure de Paris.
 
 ## Planification de 08h00 à 18h00 sur Windows
 

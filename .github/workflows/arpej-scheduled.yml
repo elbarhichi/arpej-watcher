@@ -2,7 +2,7 @@ name: Surveillance ARPEJ automatique
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "17 6-17 * * *"
 
 permissions:
   contents: write
@@ -38,7 +38,7 @@ jobs:
           fi
 
       - name: Contrôler les huit résidences
-        run: python arpej_checker.py --force
+        run: python arpej_checker.py
 
       - name: Publier le journal dans le dépôt
         if: ${{ always() }}
