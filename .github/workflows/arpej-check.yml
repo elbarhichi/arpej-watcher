@@ -3,7 +3,6 @@ name: Surveillance ARPEJ
 on:
   schedule:
     - cron: "*/5 * * * *"
-      timezone: "Europe/Paris"
   workflow_dispatch:
     inputs:
       send_test_notification:
