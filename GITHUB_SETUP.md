@@ -1,8 +1,10 @@
 # Installation sur GitHub Actions
 
 Ce guide déplace la surveillance ARPEJ vers GitHub afin qu'elle fonctionne lorsque
-le PC est éteint. Le workflow demande une tentative toutes les cinq minutes entre
-08h00 et 18h59, heure de Paris. Le premier contrôle réussi verrouille l'heure : les
+le PC est éteint. Le workflow demande une tentative à chaque minute de la plage UTC
+couverte, puis le checker limite les vrais contrôles à 08h00–18h59, heure de Paris.
+GitHub reste libre de regrouper, retarder ou abandonner ces demandes. Le premier
+contrôle réussi verrouille l'heure : les
 autres tentatives n'interrogent pas ARPEJ et ne créent aucun commit. Si une tentative
 échoue, la suivante réessaie.
 

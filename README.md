@@ -124,8 +124,9 @@ lien direct. Lorsqu'aucun logement n'est disponible, aucune notification distant
 n'est envoyée et cette décision est inscrite explicitement dans le journal.
 
 Le workflow GitHub utilise le fuseau `Europe/Paris` pour l'heure affichée et pour
-filtrer la plage active. Il demande un déclenchement toutes les cinq minutes entre
-08h00 et 18h59. Dès que le premier contrôle de l'heure réussit,
+filtrer la plage active. Comme le workflow Snake du profil, il demande un
+déclenchement à chaque minute de la plage UTC couverte. GitHub applique néanmoins
+sa fréquence et sa disponibilité propres. Dès que le premier contrôle de l'heure réussit,
 `scheduler_state.json` verrouille ce créneau : les déclenchements suivants terminent
 avant le contrôle, sans interroger ARPEJ, envoyer de notification, modifier le
 journal ou créer un commit. Un contrôle en échec ne pose pas le verrou, afin que la
