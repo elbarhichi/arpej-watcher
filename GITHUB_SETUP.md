@@ -1,8 +1,9 @@
 # Installation sur GitHub Actions
 
 Ce guide déplace la surveillance ARPEJ vers GitHub afin qu'elle fonctionne lorsque
-le PC est éteint. Le workflow contrôle les huit résidences tous les jours à 08h17,
-09h17, puis chaque heure jusqu'à 18h17, heure de Paris.
+le PC est éteint. Le workflow demande quatre tentatives par heure entre 08h00 et
+18h59, heure de Paris. Le premier contrôle réussi verrouille l'heure : les autres
+tentatives n'interrogent pas ARPEJ. Si une tentative échoue, la suivante réessaie.
 
 ## 1. Créer un dépôt privé
 
@@ -74,6 +75,8 @@ GitHub devient alors l'unique exécuteur et évite les notifications en double.
 - Les contrôles planifiés apparaissent dans l'onglet **Actions**.
 - Le fichier `arpej_checker.log`, à la racine du dépôt, reçoit automatiquement le
   résultat de chaque contrôle et son historique reste visible dans GitHub.
+- Le fichier `scheduler_state.json` mémorise la dernière heure contrôlée avec succès
+  afin qu'un seul contrôle ARPEJ soit effectué par heure.
 - Une copie téléchargeable du journal de chaque exécution est conservée 30 jours
   dans les artefacts de l'exécution GitHub Actions.
 - Une disponibilité génère une notification à chaque contrôle où elle est présente.

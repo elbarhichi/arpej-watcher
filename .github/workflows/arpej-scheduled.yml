@@ -2,7 +2,7 @@ name: Surveillance ARPEJ automatique
 
 on:
   schedule:
-    - cron: "17 6-17 * * *"
+    - cron: "7,22,37,52 6-17 * * *"
 
 permissions:
   contents: write
@@ -24,6 +24,10 @@ jobs:
       - name: Récupérer le projet
         uses: actions/checkout@v7
 
+      - name: Synchroniser le dernier verrou horaire
+        shell: bash
+        run: git pull --ff-only origin "${GITHUB_REF_NAME}"
+
       - name: Installer Python
         uses: actions/setup-python@v7
         with:
@@ -38,7 +42,7 @@ jobs:
           fi
 
       - name: Contrôler les huit résidences
-        run: python arpej_checker.py
+        run: python arpej_checker.py --once-per-hour
 
       - name: Publier le journal dans le dépôt
         if: ${{ always() }}
@@ -51,7 +55,7 @@ jobs:
           cat data/arpej_checker.log >> arpej_checker.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add arpej_checker.log
+          git add arpej_checker.log scheduler_state.json
 
           if git diff --cached --quiet; then
             exit 0

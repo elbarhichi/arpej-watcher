@@ -1,6 +1,6 @@
 from pathlib import Path
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
 import os
@@ -16,11 +16,15 @@ from arpej_checker import (  # noqa: E402
     Config,
     CheckerError,
     Residence,
+    already_succeeded_this_hour,
     build_api_url,
     format_availability_notification,
     is_within_active_hours,
+    load_scheduler_state,
+    mark_hour_as_successful,
     parse_residences,
     run,
+    run_once_per_hour,
     send_configured_notifications,
     send_ntfy,
     send_telegram,
@@ -134,6 +138,54 @@ class ArpejCheckerTests(unittest.TestCase):
         sent_message = send_notification.call_args.args[1]
         self.assertIn("Résidence : Résidence disponible", sent_message)
         self.assertIn("Disponibilité : 1 logement", sent_message)
+
+    def test_hourly_lock_skips_second_successful_attempt(self):
+        current_time = datetime(2026, 8, 5, 10, 7, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+            logger = Mock()
+            with patch("arpej_checker.run", return_value=0) as mocked_run:
+                first_result = run_once_per_hour(
+                    self.config, logger, state_path, current_time
+                )
+                second_result = run_once_per_hour(
+                    self.config,
+                    logger,
+                    state_path,
+                    current_time.replace(minute=37),
+                )
+
+        self.assertEqual(0, first_result)
+        self.assertEqual(0, second_result)
+        mocked_run.assert_called_once_with(self.config, logger)
+
+    def test_hourly_lock_allows_the_next_hour(self):
+        current_time = datetime(2026, 8, 5, 10, 7, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+            mark_hour_as_successful(state_path, current_time)
+
+            self.assertTrue(already_succeeded_this_hour(state_path, current_time))
+            self.assertFalse(
+                already_succeeded_this_hour(
+                    state_path, current_time + timedelta(hours=1)
+                )
+            )
+
+    def test_failed_check_does_not_lock_the_hour(self):
+        current_time = datetime(2026, 8, 5, 10, 7, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+            logger = Mock()
+            with patch("arpej_checker.run", return_value=1):
+                result = run_once_per_hour(
+                    self.config, logger, state_path, current_time
+                )
+
+            state = load_scheduler_state(state_path)
+
+        self.assertEqual(1, result)
+        self.assertIsNone(state["last_successful_hour"])
 
     def test_send_telegram_uses_chat_id_and_message(self):
         response = BytesIO(b'{"ok": true, "result": {"message_id": 1}}')

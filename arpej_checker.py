@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")
+DEFAULT_SCHEDULER_STATE_PATH = Path(__file__).with_name("scheduler_state.json")
 USER_AGENT = "ARPEJAvailabilityChecker/1.0 (+hourly personal availability check)"
 
 
@@ -67,6 +68,58 @@ def is_within_active_hours(
 ) -> bool:
     local_time = current_time or datetime.now().astimezone()
     return config.active_start_hour <= local_time.hour <= config.active_end_hour
+
+
+def local_hour_key(current_time: datetime | None = None) -> str:
+    """Identifie sans ambiguïté une heure locale, y compris au changement d'heure."""
+    local_time = current_time or datetime.now().astimezone()
+    if local_time.tzinfo is None:
+        local_time = local_time.astimezone()
+    return local_time.strftime("%Y-%m-%dT%H%z")
+
+
+def load_scheduler_state(path: Path) -> dict[str, str | None]:
+    if not path.exists():
+        return {"last_successful_hour": None}
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CheckerError(f"État du planificateur invalide : {path}") from exc
+    if not isinstance(state, dict):
+        raise CheckerError(f"État du planificateur invalide : {path}")
+    last_successful_hour = state.get("last_successful_hour")
+    if last_successful_hour is not None and not isinstance(last_successful_hour, str):
+        raise CheckerError(f"État du planificateur invalide : {path}")
+    return {"last_successful_hour": last_successful_hour}
+
+
+def already_succeeded_this_hour(
+    path: Path, current_time: datetime | None = None
+) -> bool:
+    return load_scheduler_state(path)["last_successful_hour"] == local_hour_key(
+        current_time
+    )
+
+
+def mark_hour_as_successful(
+    path: Path, current_time: datetime | None = None
+) -> str:
+    hour_key = local_hour_key(current_time)
+    state = {
+        "last_successful_hour": hour_key,
+        "updated_at_utc": utc_now(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, path)
+    except OSError as exc:
+        raise CheckerError(f"Impossible d'enregistrer l'état du planificateur : {path}") from exc
+    return hour_key
 
 
 def load_config(path: Path) -> Config:
@@ -694,6 +747,42 @@ def run(config: Config, logger: logging.Logger) -> int:
         connection.close()
 
 
+def run_once_per_hour(
+    config: Config,
+    logger: logging.Logger,
+    state_path: Path,
+    current_time: datetime | None = None,
+) -> int:
+    run_time = current_time or datetime.now().astimezone()
+    hour_key = local_hour_key(run_time)
+    try:
+        if already_succeeded_this_hour(state_path, run_time):
+            logger.info(
+                "Contrôle ignoré : le créneau %s a déjà été contrôlé avec succès",
+                hour_key,
+            )
+            return 0
+    except CheckerError as exc:
+        logger.error("Contrôle en échec : %s", exc)
+        return 1
+
+    result = run(config, logger)
+    if result != 0:
+        logger.info(
+            "Créneau %s non verrouillé : une autre tentative pourra réessayer",
+            hour_key,
+        )
+        return result
+
+    try:
+        mark_hour_as_successful(state_path, run_time)
+    except CheckerError as exc:
+        logger.error("Contrôle réussi, mais %s", exc)
+        return 1
+    logger.info("Créneau %s verrouillé après le contrôle réussi", hour_key)
+    return 0
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Vérifie les disponibilités des résidences ARPEJ sélectionnées."
@@ -718,6 +807,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--force",
         action="store_true",
         help="Effectue le contrôle même en dehors de la plage horaire active.",
+    )
+    parser.add_argument(
+        "--once-per-hour",
+        action="store_true",
+        help="Ignore le contrôle si un passage a déjà réussi pendant l'heure locale.",
+    )
+    parser.add_argument(
+        "--scheduler-state",
+        type=Path,
+        default=DEFAULT_SCHEDULER_STATE_PATH,
+        help=(
+            "Fichier d'état du verrou horaire "
+            f"(défaut : {DEFAULT_SCHEDULER_STATE_PATH})"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -784,6 +887,12 @@ def main(argv: list[str] | None = None) -> int:
             config.active_end_hour,
         )
         return 0
+    if args.once_per_hour:
+        return run_once_per_hour(
+            config,
+            logger,
+            args.scheduler_state.resolve(),
+        )
     return run(config, logger)
 
 

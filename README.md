@@ -124,9 +124,11 @@ lien direct. Lorsqu'aucun logement n'est disponible, aucune notification distant
 n'est envoyée et cette décision est inscrite explicitement dans le journal.
 
 Le workflow GitHub utilise le fuseau `Europe/Paris` pour l'heure affichée et pour
-filtrer la plage active. Son cron couvre une plage UTC assez large pour fonctionner
-en heure d'été comme en heure d'hiver ; le checker ignore automatiquement le
-créneau extérieur et effectue les contrôles de 08h17 à 18h17, heure de Paris.
+filtrer la plage active. Il demande quatre déclenchements par heure, aux minutes 07,
+22, 37 et 52, entre 08h00 et 18h59. Dès que le premier contrôle de l'heure réussit,
+`scheduler_state.json` verrouille ce créneau : les déclenchements suivants terminent
+sans interroger ARPEJ et sans envoyer de notification. Un contrôle en échec ne pose
+pas le verrou, afin que la tentative suivante puisse réessayer.
 
 ## Planification de 08h00 à 18h00 sur Windows
 
