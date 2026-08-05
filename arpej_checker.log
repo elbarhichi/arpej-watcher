@@ -17,3 +17,6 @@
 2026-08-04 20:03:56,774 INFO Contrôle ignoré : heure locale hors plage active 08h00–18h59
 2026-08-05 09:56:01,408 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
 2026-08-05 09:56:01,410 INFO Contrôle réussi pour 8 résidences
+2026-08-05 10:43:55,372 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-08-05 10:43:55,374 INFO Contrôle réussi pour 8 résidences
+2026-08-05 10:43:55,375 INFO Créneau 2026-08-05T10+0200 verrouillé après le contrôle réussi
