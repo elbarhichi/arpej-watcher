@@ -3,7 +3,7 @@ name: Surveillance ARPEJ automatique
 on:
   workflow_dispatch:
   schedule:
-    - cron: "7,22,37,52 6-17 * * *"
+    - cron: "*/5 6-17 * * *"
 
 permissions:
   contents: write
@@ -34,7 +34,25 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Vérifier le verrou horaire
+        id: hourly_gate
+        shell: bash
+        run: |
+          set +e
+          python arpej_checker.py --scheduler-gate
+          gate_status=$?
+          set -e
+
+          if [ "$gate_status" -eq 0 ]; then
+            echo "should_check=true" >> "$GITHUB_OUTPUT"
+          elif [ "$gate_status" -eq 3 ]; then
+            echo "should_check=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$gate_status"
+          fi
+
       - name: Vérifier la présence du secret ntfy
+        if: ${{ steps.hourly_gate.outputs.should_check == 'true' }}
         shell: bash
         run: |
           if [ -z "${ARPEJ_NTFY_TOPIC_URL:-}" ]; then
@@ -43,10 +61,11 @@ jobs:
           fi
 
       - name: Contrôler les huit résidences
+        if: ${{ steps.hourly_gate.outputs.should_check == 'true' }}
         run: python arpej_checker.py --once-per-hour
 
       - name: Publier le journal dans le dépôt
-        if: ${{ always() }}
+        if: ${{ always() && steps.hourly_gate.outputs.should_check == 'true' }}
         shell: bash
         run: |
           if [ ! -f data/arpej_checker.log ]; then
@@ -67,7 +86,7 @@ jobs:
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Conserver une copie téléchargeable du journal
-        if: ${{ always() }}
+        if: ${{ always() && steps.hourly_gate.outputs.should_check == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: arpej-checker-log-${{ github.run_id }}

@@ -18,6 +18,7 @@ from arpej_checker import (  # noqa: E402
     Residence,
     already_succeeded_this_hour,
     build_api_url,
+    evaluate_scheduler_gate,
     format_availability_notification,
     is_within_active_hours,
     load_scheduler_state,
@@ -186,6 +187,43 @@ class ArpejCheckerTests(unittest.TestCase):
 
         self.assertEqual(1, result)
         self.assertIsNone(state["last_successful_hour"])
+
+    def test_scheduler_gate_opens_unchecked_active_hour(self):
+        current_time = datetime(2026, 8, 5, 10, 7, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+
+            should_check, reason = evaluate_scheduler_gate(
+                self.config, state_path, current_time
+            )
+
+        self.assertTrue(should_check)
+        self.assertIn("est ouvert", reason)
+
+    def test_scheduler_gate_skips_locked_hour_without_running_checker(self):
+        current_time = datetime(2026, 8, 5, 10, 7, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+            mark_hour_as_successful(state_path, current_time)
+
+            should_check, reason = evaluate_scheduler_gate(
+                self.config, state_path, current_time.replace(minute=52)
+            )
+
+        self.assertFalse(should_check)
+        self.assertIn("déjà verrouillé", reason)
+
+    def test_scheduler_gate_skips_outside_active_hours(self):
+        current_time = datetime(2026, 8, 5, 19, 5, tzinfo=timezone(timedelta(hours=2)))
+        with tempfile.TemporaryDirectory() as temp_directory:
+            state_path = Path(temp_directory) / "scheduler_state.json"
+
+            should_check, reason = evaluate_scheduler_gate(
+                self.config, state_path, current_time
+            )
+
+        self.assertFalse(should_check)
+        self.assertIn("hors plage active", reason)
 
     def test_send_telegram_uses_chat_id_and_message(self):
         response = BytesIO(b'{"ok": true, "result": {"message_id": 1}}')

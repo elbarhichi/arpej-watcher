@@ -26,6 +26,7 @@ from urllib.request import Request, urlopen
 
 DEFAULT_CONFIG_PATH = Path(__file__).with_name("config.json")
 DEFAULT_SCHEDULER_STATE_PATH = Path(__file__).with_name("scheduler_state.json")
+SCHEDULER_SKIP_EXIT_CODE = 3
 USER_AGENT = "ARPEJAvailabilityChecker/1.0 (+hourly personal availability check)"
 
 
@@ -120,6 +121,27 @@ def mark_hour_as_successful(
     except OSError as exc:
         raise CheckerError(f"Impossible d'enregistrer l'état du planificateur : {path}") from exc
     return hour_key
+
+
+def evaluate_scheduler_gate(
+    config: Config,
+    state_path: Path,
+    current_time: datetime | None = None,
+) -> tuple[bool, str]:
+    run_time = current_time or datetime.now().astimezone()
+    if not is_within_active_hours(config, run_time):
+        return (
+            False,
+            "Tentative ignorée : heure locale hors plage active "
+            f"{config.active_start_hour:02d}h00–{config.active_end_hour:02d}h59",
+        )
+    hour_key = local_hour_key(run_time)
+    if already_succeeded_this_hour(state_path, run_time):
+        return (
+            False,
+            f"Tentative ignorée : le créneau {hour_key} est déjà verrouillé",
+        )
+    return True, f"Contrôle autorisé : le créneau {hour_key} est ouvert"
 
 
 def load_config(path: Path) -> Config:
@@ -822,6 +844,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             f"(défaut : {DEFAULT_SCHEDULER_STATE_PATH})"
         ),
     )
+    parser.add_argument(
+        "--scheduler-gate",
+        action="store_true",
+        help=(
+            "Indique si le workflow planifié doit lancer un vrai contrôle, "
+            "sans créer de journal."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -872,6 +902,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         config = load_config(args.config.resolve())
+    except Exception as exc:
+        print(f"Erreur de configuration : {exc}", file=sys.stderr)
+        return 2
+    if args.scheduler_gate:
+        try:
+            should_check, reason = evaluate_scheduler_gate(
+                config,
+                args.scheduler_state.resolve(),
+            )
+        except CheckerError as exc:
+            print(f"Erreur du verrou horaire : {exc}", file=sys.stderr)
+            return 2
+        print(reason)
+        return 0 if should_check else SCHEDULER_SKIP_EXIT_CODE
+    try:
         logger = configure_logging(config.data_directory)
     except Exception as exc:
         print(f"Erreur de configuration : {exc}", file=sys.stderr)
