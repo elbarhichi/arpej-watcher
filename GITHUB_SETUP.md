@@ -83,6 +83,8 @@ GitHub devient alors l'unique exécuteur et évite les notifications en double.
 - Aucune disponibilité génère un log, mais aucune notification.
 - Le bouton **Run workflow** permet aussi de lancer un contrôle manuel en laissant
   l'option de notification de test décochée.
+- Le workflow **Surveillance ARPEJ automatique** possède aussi un bouton manuel de
+  diagnostic : il applique le même verrou horaire que les déclenchements planifiés.
 - Le fichier `.github/workflows/arpej-scheduled.yml` contient la planification
   automatique. Le fichier `.github/workflows/arpej-check.yml` sert uniquement aux
   lancements manuels.

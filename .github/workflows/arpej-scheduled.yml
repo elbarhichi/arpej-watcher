@@ -1,6 +1,7 @@
 name: Surveillance ARPEJ automatique
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "7,22,37,52 6-17 * * *"
 
