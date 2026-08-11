@@ -169,3 +169,6 @@
 2026-08-10 18:27:57,528 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
 2026-08-10 18:27:57,530 INFO Contrôle réussi pour 8 résidences
 2026-08-10 18:27:57,531 INFO Créneau 2026-08-10T18+0200 verrouillé après le contrôle réussi
+2026-08-11 08:56:39,531 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-08-11 08:56:39,534 INFO Contrôle réussi pour 8 résidences
+2026-08-11 08:56:39,534 INFO Créneau 2026-08-11T08+0200 verrouillé après le contrôle réussi
