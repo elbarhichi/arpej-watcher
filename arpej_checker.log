@@ -214,3 +214,6 @@
 2026-08-12 13:46:46,135 INFO Test envoyé via ntfy
 2026-08-12 13:48:45,809 INFO Test envoyé via ntfy
 2026-08-12 13:49:28,376 INFO Test envoyé via ntfy
+2026-08-12 14:27:09,144 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-08-12 14:27:09,147 INFO Contrôle réussi pour 8 résidences
+2026-08-12 14:27:09,147 INFO Créneau 2026-08-12T14+0200 verrouillé après le contrôle réussi
