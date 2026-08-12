@@ -202,3 +202,6 @@
 2026-08-12 10:41:04,298 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Raymond Aron (1)
 2026-08-12 10:41:04,301 INFO Contrôle réussi pour 8 résidences
 2026-08-12 10:41:04,302 INFO Créneau 2026-08-12T10+0200 verrouillé après le contrôle réussi
+2026-08-12 11:46:15,292 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-08-12 11:46:15,294 INFO Contrôle réussi pour 8 résidences
+2026-08-12 11:46:15,295 INFO Créneau 2026-08-12T11+0200 verrouillé après le contrôle réussi
