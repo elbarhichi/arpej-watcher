@@ -220,3 +220,6 @@
 2026-08-12 15:56:59,264 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Raymond Aron (1)
 2026-08-12 15:56:59,266 INFO Contrôle réussi pour 8 résidences
 2026-08-12 15:56:59,266 INFO Créneau 2026-08-12T15+0200 verrouillé après le contrôle réussi
+2026-08-12 16:56:11,571 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Raymond Aron (1)
+2026-08-12 16:56:11,574 INFO Contrôle réussi pour 8 résidences
+2026-08-12 16:56:11,575 INFO Créneau 2026-08-12T16+0200 verrouillé après le contrôle réussi
