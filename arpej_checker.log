@@ -502,3 +502,6 @@
 2026-08-21 13:01:11,555 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Guy de Maupassant (1)
 2026-08-21 13:01:11,557 INFO Contrôle réussi pour 8 résidences
 2026-08-21 13:01:11,558 INFO Créneau 2026-08-21T13+0200 verrouillé après le contrôle réussi
+2026-08-21 14:39:53,819 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Louis Blériot (1)
+2026-08-21 14:39:53,821 INFO Contrôle réussi pour 8 résidences
+2026-08-21 14:39:53,822 INFO Créneau 2026-08-21T14+0200 verrouillé après le contrôle réussi
