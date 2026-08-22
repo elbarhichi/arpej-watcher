@@ -529,3 +529,6 @@
 2026-08-22 11:02:40,183 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Louis Blériot (1)
 2026-08-22 11:02:40,186 INFO Contrôle réussi pour 8 résidences
 2026-08-22 11:02:40,187 INFO Créneau 2026-08-22T11+0200 verrouillé après le contrôle réussi
+2026-08-22 12:18:01,575 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Louis Blériot (1)
+2026-08-22 12:18:01,578 INFO Contrôle réussi pour 8 résidences
+2026-08-22 12:18:01,579 INFO Créneau 2026-08-22T12+0200 verrouillé après le contrôle réussi
