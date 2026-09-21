@@ -823,3 +823,6 @@
 2026-09-20 16:18:24,222 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Guy de Maupassant (1)
 2026-09-20 16:18:24,243 INFO Contrôle réussi pour 8 résidences
 2026-09-20 16:18:24,244 INFO Créneau 2026-09-20T16+0200 verrouillé après le contrôle réussi
+2026-09-21 13:44:40,574 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Jacques-Henri Lartigue (1)
+2026-09-21 13:44:40,577 INFO Contrôle réussi pour 8 résidences
+2026-09-21 13:44:40,578 INFO Créneau 2026-09-21T13+0200 verrouillé après le contrôle réussi
