@@ -829,3 +829,6 @@
 2026-09-22 12:47:58,118 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Jacques-Henri Lartigue (1)
 2026-09-22 12:47:58,120 INFO Contrôle réussi pour 8 résidences
 2026-09-22 12:47:58,121 INFO Créneau 2026-09-22T12+0200 verrouillé après le contrôle réussi
+2026-09-22 17:11:36,531 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-09-22 17:11:36,535 INFO Contrôle réussi pour 8 résidences
+2026-09-22 17:11:36,535 INFO Créneau 2026-09-22T17+0200 verrouillé après le contrôle réussi
