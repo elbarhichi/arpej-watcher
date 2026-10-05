@@ -892,3 +892,6 @@
 2026-10-04 17:59:24,560 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
 2026-10-04 17:59:24,563 INFO Contrôle réussi pour 8 résidences
 2026-10-04 17:59:24,563 INFO Créneau 2026-10-04T17+0200 verrouillé après le contrôle réussi
+2026-10-05 15:20:28,786 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Raymond Aron (2), Jacques-Henri Lartigue (1)
+2026-10-05 15:20:28,789 INFO Contrôle réussi pour 8 résidences
+2026-10-05 15:20:28,789 INFO Créneau 2026-10-05T15+0200 verrouillé après le contrôle réussi
