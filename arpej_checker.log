@@ -979,3 +979,6 @@
 2026-10-23 12:52:51,388 INFO Décision notification : envoyée via ntfy ; disponibilité(s) : Chanzy (1)
 2026-10-23 12:52:51,390 INFO Contrôle réussi pour 8 résidences
 2026-10-23 12:52:51,391 INFO Créneau 2026-10-23T12+0200 verrouillé après le contrôle réussi
+2026-10-23 17:30:01,124 INFO Décision notification : non envoyée ; aucun logement disponible sur 8 résidences
+2026-10-23 17:30:01,126 INFO Contrôle réussi pour 8 résidences
+2026-10-23 17:30:01,127 INFO Créneau 2026-10-23T17+0200 verrouillé après le contrôle réussi
