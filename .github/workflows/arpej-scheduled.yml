@@ -2,7 +2,9 @@ name: Surveillance ARPEJ automatique
 
 on:
   schedule:
-    - cron: "* 6-17 * * *"
+    # UTC: covers 08:00–18:59 in Paris in both summer and winter.
+    # GitHub supports a minimum interval of five minutes; the script locks each hour.
+    - cron: "2-57/5 6-17 * * *"
 
 permissions:
   contents: write
@@ -59,7 +61,7 @@ jobs:
             exit 1
           fi
 
-      - name: Contrôler les huit résidences
+      - name: Contrôler les résidences sélectionnées
         if: ${{ steps.hourly_gate.outputs.should_check == 'true' }}
         run: python arpej_checker.py --once-per-hour
 

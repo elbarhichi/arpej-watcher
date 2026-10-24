@@ -46,7 +46,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.send_test_notification }}
         run: python arpej_checker.py --test-notification
 
-      - name: Contrôler les huit résidences
+      - name: Contrôler les résidences sélectionnées
         if: ${{ !inputs.send_test_notification }}
         run: python arpej_checker.py --force
 

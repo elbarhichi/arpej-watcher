@@ -46,9 +46,6 @@ class Config:
     data_directory: Path
     secrets_file: Path
     ntfy_topic_url_environment_variable: str
-    webhook_url_environment_variable: str
-    telegram_bot_token_environment_variable: str
-    telegram_chat_id_environment_variable: str
 
 
 @dataclass(frozen=True)
@@ -204,21 +201,6 @@ def load_config(path: Path) -> Config:
                 "ARPEJ_NTFY_TOPIC_URL",
             )
         ),
-        webhook_url_environment_variable=str(
-            raw.get("webhook_url_environment_variable", "ARPEJ_WEBHOOK_URL")
-        ),
-        telegram_bot_token_environment_variable=str(
-            raw.get(
-                "telegram_bot_token_environment_variable",
-                "ARPEJ_TELEGRAM_BOT_TOKEN",
-            )
-        ),
-        telegram_chat_id_environment_variable=str(
-            raw.get(
-                "telegram_chat_id_environment_variable",
-                "ARPEJ_TELEGRAM_CHAT_ID",
-            )
-        ),
     )
 
 
@@ -228,14 +210,7 @@ def build_api_url(config: Config) -> str:
         ("display", "map"),
     ]
     params.extend(("related_city[]", city_id) for city_id in config.city_ids)
-    params.extend(
-        [
-            ("price_from", "0"),
-            ("price_to", "1000"),
-            ("show_if_full", "true"),
-            ("show_if_colocations", "false"),
-        ]
-    )
+    params.append(("show_if_full", "true"))
     separator = "&" if urlparse(config.api_url).query else "?"
     return f"{config.api_url}{separator}{urlencode(params)}"
 
@@ -471,91 +446,15 @@ def append_alert_file(data_directory: Path, checked_at: str, message: str) -> No
         handle.write(f"[{checked_at}]\n{message}\n\n")
 
 
-def send_webhook(webhook_url: str, message: str, timeout_seconds: float) -> None:
-    parsed = urlparse(webhook_url)
-    if parsed.scheme != "https" or not parsed.hostname:
-        raise CheckerError("ARPEJ_WEBHOOK_URL doit être une URL HTTPS valide")
-    body = json.dumps({"content": message, "text": message}).encode("utf-8")
-    request = Request(
-        webhook_url,
-        data=body,
-        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=timeout_seconds):
-            pass
-    except HTTPError as exc:
-        raise CheckerError(
-            f"Échec de la notification webhook (HTTP {exc.code})"
-        ) from None
-    except (URLError, TimeoutError, OSError):
-        raise CheckerError("Échec réseau de la notification webhook") from None
-
-
-def telegram_api_request(
-    bot_token: str,
-    method: str,
-    payload: dict[str, Any],
-    timeout_seconds: float,
-) -> dict[str, Any]:
-    if not bot_token or ":" not in bot_token or any(char.isspace() for char in bot_token):
-        raise CheckerError("Le token Telegram est absent ou invalide")
-    if not method.isalpha():
-        raise CheckerError("Méthode Telegram invalide")
-
-    request = Request(
-        f"https://api.telegram.org/bot{bot_token}/{method}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=timeout_seconds) as response:
-            result = json.load(response)
-    except HTTPError as exc:
-        # L'URL d'une HTTPError contient le token : ne jamais journaliser exc.
-        raise CheckerError(
-            f"Échec de la notification Telegram (HTTP {exc.code})"
-        ) from None
-    except (URLError, TimeoutError, json.JSONDecodeError, OSError):
-        raise CheckerError("Échec réseau de la notification Telegram") from None
-
-    if not isinstance(result, dict) or result.get("ok") is not True:
-        description = "réponse API invalide"
-        if isinstance(result, dict) and isinstance(result.get("description"), str):
-            description = result["description"][:300]
-        raise CheckerError(f"Telegram a refusé la requête : {description}")
-    return result
-
-
-def send_telegram(
-    bot_token: str,
-    chat_id: str,
-    message: str,
-    timeout_seconds: float,
-) -> None:
-    chat_id = chat_id.strip()
-    if not chat_id:
-        raise CheckerError("Le chat ID Telegram est absent")
-    telegram_api_request(
-        bot_token,
-        "sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": message,
-            "disable_web_page_preview": True,
-        },
-        timeout_seconds,
-    )
-
-
 def send_ntfy(topic_url: str, message: str, timeout_seconds: float) -> None:
     parsed = urlparse(topic_url)
     topic = parsed.path.strip("/")
     if (
         parsed.scheme != "https"
         or parsed.hostname != "ntfy.sh"
+        or parsed.netloc != "ntfy.sh"
+        or parsed.query
+        or parsed.fragment
         or not (20 <= len(topic) <= 64)
         or any(char not in "-_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" for char in topic)
     ):
@@ -581,79 +480,21 @@ def send_ntfy(topic_url: str, message: str, timeout_seconds: float) -> None:
         raise CheckerError("Échec réseau de la notification ntfy") from None
 
 
-def discover_telegram_chats(
-    bot_token: str, timeout_seconds: float
-) -> list[tuple[str, str]]:
-    response = telegram_api_request(
-        bot_token,
-        "getUpdates",
-        {"limit": 50, "timeout": 0},
-        timeout_seconds,
-    )
-    updates = response.get("result", [])
-    if not isinstance(updates, list):
-        raise CheckerError("Réponse getUpdates de Telegram invalide")
-
-    chats: dict[str, str] = {}
-    for update in updates:
-        if not isinstance(update, dict):
-            continue
-        message = update.get("message") or update.get("channel_post")
-        if not isinstance(message, dict) or not isinstance(message.get("chat"), dict):
-            continue
-        chat = message["chat"]
-        chat_id = str(chat.get("id", "")).strip()
-        if not chat_id:
-            continue
-        name_parts = [
-            str(chat.get(key, "")).strip()
-            for key in ("first_name", "last_name", "title", "username")
-        ]
-        chats[chat_id] = " ".join(part for part in name_parts if part) or "chat Telegram"
-    return sorted(chats.items())
-
-
 def send_configured_notifications(
     config: Config, message: str
 ) -> tuple[str, ...]:
-    channels: list[str] = []
     secrets = load_notification_secrets(config.secrets_file)
-    bot_token = notification_secret(
-        secrets,
-        config.telegram_bot_token_environment_variable,
-        "telegram_bot_token",
-    )
-    chat_id = notification_secret(
-        secrets,
-        config.telegram_chat_id_environment_variable,
-        "telegram_chat_id",
-    )
-    if bool(bot_token) != bool(chat_id):
-        raise CheckerError(
-            "Telegram est partiellement configuré : le token et le chat ID sont requis"
-        )
-    if bot_token and chat_id:
-        send_telegram(bot_token, chat_id, message, config.timeout_seconds)
-        channels.append("Telegram")
-
     ntfy_topic_url = notification_secret(
         secrets,
         config.ntfy_topic_url_environment_variable,
         "ntfy_topic_url",
     )
-    if ntfy_topic_url:
-        send_ntfy(ntfy_topic_url, message, config.timeout_seconds)
-        channels.append("ntfy")
-
-    webhook_url = notification_secret(
-        secrets,
-        config.webhook_url_environment_variable,
-        "webhook_url",
-    )
-    if webhook_url:
-        send_webhook(webhook_url, message, config.timeout_seconds)
-        channels.append("webhook")
-    return tuple(channels)
+    if not ntfy_topic_url:
+        raise CheckerError(
+            "ntfy n'est pas configuré : définir ARPEJ_NTFY_TOPIC_URL ou lancer setup_ntfy.py"
+        )
+    send_ntfy(ntfy_topic_url, message, config.timeout_seconds)
+    return ("ntfy",)
 
 
 def load_notification_secrets(path: Path) -> dict[str, str]:
@@ -723,6 +564,11 @@ def run(config: Config, logger: logging.Logger) -> int:
         payload = fetch_payload(config)
         residences = parse_residences(payload)
         validate_expected_residences(residences, config.expected_residence_ids)
+        residences = [
+            residence
+            for residence in residences
+            if residence.residence_id in config.expected_residence_ids
+        ]
         print_summary(residences)
 
         available = [
@@ -735,21 +581,15 @@ def run(config: Config, logger: logging.Logger) -> int:
             print(f"\n{message}")
             append_alert_file(config.data_directory, checked_at, message)
             channels = send_configured_notifications(config, message)
-            if channels:
-                details = ", ".join(
-                    f"{residence.title} ({residence.available_rooms})"
-                    for residence in available
-                )
-                logger.info(
-                    "Décision notification : envoyée via %s ; disponibilité(s) : %s",
-                    ", ".join(channels),
-                    details,
-                )
-            else:
-                logger.warning(
-                    "Décision notification : disponibilité détectée, mais aucun canal "
-                    "distant n'est configuré"
-                )
+            details = ", ".join(
+                f"{residence.title} ({residence.available_rooms})"
+                for residence in available
+            )
+            logger.info(
+                "Décision notification : envoyée via %s ; disponibilité(s) : %s",
+                ", ".join(channels),
+                details,
+            )
         else:
             logger.info(
                 "Décision notification : non envoyée ; aucun logement disponible "
@@ -818,12 +658,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--test-notification",
         action="store_true",
-        help="Envoie immédiatement un message de test sur les canaux configurés.",
-    )
-    parser.add_argument(
-        "--show-telegram-chat-id",
-        action="store_true",
-        help="Affiche les chats ayant récemment écrit au bot Telegram.",
+        help="Envoie immédiatement un message de test avec ntfy.",
     )
     parser.add_argument(
         "--force",
@@ -861,41 +696,12 @@ def test_notification(config: Config, logger: logging.Logger) -> int:
             config,
             "Test ARPEJ réussi : les notifications de disponibilité sont actives.",
         )
-        if not channels:
-            raise CheckerError("Aucun canal de notification n'est configuré")
         logger.info("Test envoyé via %s", ", ".join(channels))
         print("Notification de test envoyée avec succès.")
         return 0
     except Exception as exc:
         logger.error("Test de notification en échec : %s", exc)
         return 1
-
-
-def show_telegram_chat_ids(config: Config, logger: logging.Logger) -> int:
-    secrets = load_notification_secrets(config.secrets_file)
-    token = notification_secret(
-        secrets,
-        config.telegram_bot_token_environment_variable,
-        "telegram_bot_token",
-    )
-    if not token:
-        logger.error(
-            "La variable %s n'est pas définie",
-            config.telegram_bot_token_environment_variable,
-        )
-        return 1
-    try:
-        chats = discover_telegram_chats(token, config.timeout_seconds)
-    except Exception as exc:
-        logger.error("Lecture des chats Telegram en échec : %s", exc)
-        return 1
-    if not chats:
-        logger.error("Aucun chat trouvé. Envoyez d'abord /start à votre bot Telegram.")
-        return 1
-    print("Chats Telegram trouvés :")
-    for chat_id, name in chats:
-        print(f"- {chat_id} — {name}")
-    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -921,8 +727,6 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"Erreur de configuration : {exc}", file=sys.stderr)
         return 2
-    if args.show_telegram_chat_id:
-        return show_telegram_chat_ids(config, logger)
     if args.test_notification:
         return test_notification(config, logger)
     if not args.force and not is_within_active_hours(config):

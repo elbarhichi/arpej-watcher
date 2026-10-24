@@ -1,91 +1,119 @@
-# Installation sur GitHub Actions
+# Run your own watcher on GitHub Actions
 
-Ce guide déplace la surveillance ARPEJ vers GitHub afin qu'elle fonctionne lorsque
-le PC est éteint. Le workflow demande une tentative à chaque minute de la plage UTC
-couverte, puis le checker limite les vrais contrôles à 08h00–18h59, heure de Paris.
-GitHub reste libre de regrouper, retarder ou abandonner ces demandes. Le premier
-contrôle réussi verrouille l'heure : les
-autres tentatives n'interrogent pas ARPEJ et ne créent aucun commit. Si une tentative
-échoue, la suivante réessaie.
+Your computer can be off after setup. Each person needs their own repository,
+own watchlist and own ntfy topic. The project does not require Netlify or Telegram.
 
-## 1. Créer un dépôt privé
+## 1. Fork and configure
 
-Sur `https://github.com/new`, créer un dépôt privé, par exemple `arpej-watcher`.
-Ne pas demander à GitHub d'ajouter un README, un `.gitignore` ou une licence.
+Click **Fork** on this repository and create a copy in your account. Work in your
+copy from now on. Its default branch must contain the workflow files.
 
-## 2. Vérifier les fichiers avant l'envoi
+Choose residences using [docs/RESIDENCES.md](docs/RESIDENCES.md), and commit
+`config.json` to your default branch. You may clone your fork locally and use
+the helper, or copy the helper's two JSON fields into GitHub's file editor.
+The original eight residences are only the default example.
 
-Ne jamais envoyer les éléments suivants :
+## 2. Create your own ntfy topic
 
-- `secrets.json` ;
-- `data/` ;
-- `__pycache__/` ;
-- les tokens ou les URL privées dans une conversation.
+1. Install the ntfy mobile app using the links in the
+   [official subscription guide](https://docs.ntfy.sh/subscribe/phone/).
+2. In your local checkout, run `python setup_ntfy.py`. This generates an
+   unpredictable topic and saves its URL in the ignored `secrets.json` file.
+   It prints `WEB_URL` and `APP_URL` locally and publishes a test message.
+3. In the app, subscribe using server `https://ntfy.sh` and the topic name
+   (the part after the final `/` in `WEB_URL`). Allow notifications. You can
+   also open the web URL and subscribe in a supported browser.
+4. Run `python arpej_checker.py --test-notification` after subscribing. Confirm
+   receipt on your phone; a successful HTTP request alone does not prove that
+   the phone subscription is working.
 
-Ils sont déjà couverts par `.gitignore`.
+No-local-Python option: generate a long random name with a password generator
+(20–64 characters, using letters, numbers, `_` and `-`), subscribe to that topic
+on `ntfy.sh`, and use `https://ntfy.sh/YOUR-RANDOM-TOPIC` in step 3 below.
+This project supports unreserved topics on `ntfy.sh`; authenticated or self-hosted
+ntfy servers require code changes.
 
-## 3. Envoyer le projet
+On the public ntfy server, knowledge of the topic permits reading/publishing to
+it. Treat it like a password; see [ntfy's topic guidance](https://docs.ntfy.sh/publish/#picking-a-topic).
+Never commit the URL, `secrets.json`, or a screenshot containing it. `.gitignore`
+already excludes `secrets.json`, `data/`, Python caches and virtual environments.
+Forks **do not inherit GitHub secrets**, so everybody supplies their own URL.
 
-Depuis PowerShell, dans le dossier du projet :
+## 3. Add the GitHub secret
 
-```powershell
-git init
-git branch -M main
-git add .
-git status
-git commit -m "Configure la surveillance ARPEJ"
-git remote add origin https://github.com/VOTRE-COMPTE/arpej-watcher.git
-git push -u origin main
-```
+In **your fork**: **Settings → Secrets and variables → Actions → New repository secret**.
 
-Dans la sortie de `git status`, vérifier que `secrets.json`, `data/` et les dossiers
-`__pycache__` ne figurent pas dans les fichiers ajoutés.
+- Name: `ARPEJ_NTFY_TOPIC_URL`
+- Value: the full `https://ntfy.sh/...` URL generated in step 2.
 
-## 4. Ajouter le secret ntfy
+The environment secret takes precedence over a local secrets file. Never paste
+the topic into `config.json` or the workflow YAML.
 
-Dans le dépôt GitHub :
+## 4. Enable workflows and journal commits
 
-1. ouvrir **Settings** ;
-2. ouvrir **Secrets and variables**, puis **Actions** ;
-3. cliquer sur **New repository secret** ;
-4. nommer le secret `ARPEJ_NTFY_TOPIC_URL` ;
-5. coller comme valeur l'URL ntfy complète conservée localement dans `secrets.json` ;
-6. enregistrer.
+Open **Actions** and enable workflows if GitHub asks you to enable them for the
+fork. Under **Settings → Actions → General**, ensure Actions are allowed and
+the workflow token may write repository contents. The workflows request
+`contents: write` to publish the journal/state. Organization policy or branch
+protection may prevent direct bot commits; use a personal fork whose default
+branch allows the workflow's commits.
 
-Ne jamais ajouter cette URL directement dans le workflow ou dans un commit.
+Open **Actions → Surveillance ARPEJ automatique** and enable the workflow if
+it is disabled. Only the default branch receives scheduled runs.
 
-## 5. Envoyer un test depuis GitHub
+## 5. Verify delivery, then a real check
 
-1. ouvrir l'onglet **Actions** ;
-2. choisir **Surveillance ARPEJ** ;
-3. cliquer sur **Run workflow** ;
-4. cocher **Envoyer uniquement une notification ntfy de test** ;
-5. lancer le workflow ;
-6. vérifier la réception de la notification et le résultat vert du workflow.
+1. Open **Actions → Surveillance ARPEJ manuelle → Run workflow**.
+2. Choose your default branch and check **Envoyer uniquement une notification ntfy de test**.
+3. Run it, confirm a green result and receipt of the test on your device.
+4. Run again with that checkbox **unchecked** to perform a real check immediately.
+   This bypasses active hours. A full residence produces a journal entry, not an alert.
+5. Open `arpej_checker.log` to see the real-check result.
 
-## 6. Désactiver la tâche locale
+The manual workflow remains available for tests; the automatic workflow only
+uses `schedule`. If a local Windows task exists, pause it with
+`.\manage_task.ps1 pause` once the cloud test works.
 
-Seulement après la réussite du test GitHub :
+## Schedule, changes and stopping
 
-```powershell
-.\manage_task.ps1 pause
-```
+The default schedule is `2-57/5 6-17 * * *` in UTC (minutes 2, 7, …, 57). It
+requests a start every five minutes over the window that covers Paris
+08:00–18:59 in both summer and winter. `TZ: Europe/Paris` and `active_hours` in
+`config.json` apply the actual local-hours filter. The hourly state prevents
+additional ARPEJ checks after the first success in each hour.
 
-GitHub devient alors l'unique exécuteur et évite les notifications en double.
+To change active hours or timezone, change `config.json` and the workflow's
+`TZ`/UTC cron coverage together. `end: 18` means through **18:59**, not precisely
+18:00. Changes to the watchlist take effect at the next check; use a manual check
+to verify them immediately if the current hour is already locked.
 
-## Exploitation courante
+To stop automatic execution, open the automatic workflow's **… → Disable workflow**.
+Enable it again to resume. Disabling does not cancel an already running job;
+cancel that run separately if needed. No local background process is required.
 
-- Les contrôles planifiés apparaissent dans l'onglet **Actions**.
-- Le fichier `arpej_checker.log`, à la racine du dépôt, reçoit automatiquement le
-  résultat de chaque contrôle et son historique reste visible dans GitHub.
-- Le fichier `scheduler_state.json` mémorise la dernière heure contrôlée avec succès
-  afin qu'un seul contrôle ARPEJ soit effectué par heure.
-- Une copie téléchargeable du journal de chaque exécution est conservée 30 jours
-  dans les artefacts de l'exécution GitHub Actions.
-- Une disponibilité génère une notification à chaque contrôle où elle est présente.
-- Aucune disponibilité génère un log, mais aucune notification.
-- Le bouton **Run workflow** permet aussi de lancer un contrôle manuel en laissant
-  l'option de notification de test décochée.
-- Le fichier `.github/workflows/arpej-scheduled.yml` contient la planification
-  automatique. Le fichier `.github/workflows/arpej-check.yml` sert uniquement aux
-  lancements manuels.
+## Troubleshooting and limits
+
+| Symptom | Check |
+| --- | --- |
+| No runs | Actions/workflow enabled, YAML on default branch, active UTC window |
+| Late/missing hour | GitHub can delay or drop scheduled events; examine actual run times |
+| Green run, no journal change | The gate may have skipped a locked hour or an out-of-hours run; inspect the gate step |
+| Green real check, no alert | All selected residences may be full; read the notification decision in the journal |
+| Missing ntfy secret | Add `ARPEJ_NTFY_TOPIC_URL` in your fork, not the upstream repository |
+| ntfy request succeeds, phone silent | Check subscription/topic, app permissions and the official ntfy troubleshooting guide |
+| Expected ID missing | Verify selected city IDs and list the residences again; do not assume full occupancy |
+| Journal push fails | Check token write permissions, branch protection and overlapping edits |
+| Job never starts, no steps/logs | GitHub may have failed to assign a runner; the script did not execute |
+
+The supported shortest schedule interval is five minutes. GitHub documents
+possible delays/dropped jobs and automatic disabling of scheduled workflows in
+public repositories after 60 days without repository activity. See the
+[official schedule documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+Repeated schedule requests improve retry opportunities but do not guarantee an
+hourly check. There is no automatic rerun of hours missed entirely.
+
+Logs in `arpej_checker.log` remain in Git history; per-run downloadable logs expire
+after 30 days. A fork includes upstream history. You can clear the current root
+journal and reset `scheduler_state.json` to `{"last_successful_hour": null}` in
+your fork for a fresh start; this does not erase historical commits. Do not
+publish your local `data/` directory or secrets when sharing your copy.
