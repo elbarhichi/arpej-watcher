@@ -5,8 +5,7 @@ notifications when accommodation is available. GitHub Actions can run it while
 your computer is off. Python 3.10+ is required locally; there are no third-party
 Python dependencies. The workflows use Python 3.12.
 
-The notification service is [ntfy](https://ntfy.sh), not Netlify. ntfy is the only
-supported notification channel. No phone number or messaging bot is needed.
+The notification service is [ntfy](https://ntfy.sh).
 This project is independent of ARPEJ; it does not reserve accommodation.
 
 ## Start with your own copy
