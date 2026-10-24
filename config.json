@@ -27,8 +27,5 @@
   },
   "data_directory": "data",
   "secrets_file": "secrets.json",
-  "ntfy_topic_url_environment_variable": "ARPEJ_NTFY_TOPIC_URL",
-  "webhook_url_environment_variable": "ARPEJ_WEBHOOK_URL",
-  "telegram_bot_token_environment_variable": "ARPEJ_TELEGRAM_BOT_TOKEN",
-  "telegram_chat_id_environment_variable": "ARPEJ_TELEGRAM_CHAT_ID"
+  "ntfy_topic_url_environment_variable": "ARPEJ_NTFY_TOPIC_URL"
 }

@@ -1,176 +1,145 @@
-# Surveillance des disponibilités ARPEJ
+# ARPEJ residence availability watcher
 
-Ce projet surveille les huit résidences retournées par la recherche ARPEJ fournie.
-Il utilise directement l'API JSON publique appelée par le site : aucun navigateur,
-Selenium ou Playwright n'est nécessaire.
+A small Python script that checks selected ARPEJ residences and sends **ntfy**
+notifications when accommodation is available. GitHub Actions can run it while
+your computer is off. Python 3.10+ is required locally; there are no third-party
+Python dependencies. The workflows use Python 3.12.
 
-Pour une exécution indépendante du PC avec GitHub Actions, suivre
-[`GITHUB_SETUP.md`](GITHUB_SETUP.md).
+The notification service is [ntfy](https://ntfy.sh), not Netlify. ntfy is the only
+supported notification channel. No phone number or messaging bot is needed.
+This project is independent of ARPEJ; it does not reserve accommodation.
 
-## Résidences surveillées
+## Start with your own copy
 
-- Charles Frederick Worth — Suresnes
-- Louis Blériot — Suresnes
-- Raymond Aron — La Garenne-Colombes
-- Guy de Maupassant — Bezons
-- Louis Faure-Dujarric — Colombes
-- Jacques-Henri Lartigue — Courbevoie
-- Neuilly-Roule — Neuilly-sur-Seine
-- Chanzy — Nanterre
+1. **Fork** this repository into your own GitHub account.
+2. Choose your residences using [the selection guide](docs/RESIDENCES.md).
+   Commit your updated `config.json` to the default branch of your copy.
+3. Create your own ntfy topic and add its URL as the GitHub Actions secret
+   `ARPEJ_NTFY_TOPIC_URL`. Never reuse someone else's topic.
+4. Follow [GITHUB_SETUP.md](GITHUB_SETUP.md) to enable Actions, test notifications,
+   and activate automatic checks.
 
-Les identifiants de recherche et de résidences sont dans `config.json`. Toute
-nouvelle résidence retournée par les mêmes villes sera aussi surveillée. En revanche,
-si l'une des huit résidences attendues disparaît de la réponse, le contrôle échoue
-explicitement au lieu d'annoncer à tort qu'elle est complète.
+For a local checkout of **your fork**:
 
-## Lancement manuel
-
-Python 3.10 ou plus récent suffit ; aucune dépendance externe n'est requise. Le
-lanceur utilise Python pour Windows s'il est installé, puis utilise automatiquement
-Python dans WSL en solution de repli. Cette machine utilisera actuellement WSL.
-
-Sous PowerShell :
-
-```powershell
-cd C:\Users\DCTH3282\ARPEJ
-.\run_checker.ps1 -Force
+```sh
+git clone https://github.com/YOUR-USERNAME/arpej-watcher.git
+cd arpej-watcher
+python setup_ntfy.py
+python arpej_checker.py --test-notification
+python arpej_checker.py --force
 ```
 
-Ou directement :
+Use `python3` on Linux/macOS or `py -3` on Windows if `python` is unavailable.
+Before running `setup_ntfy.py`, read the subscription steps in
+[GITHUB_SETUP.md](GITHUB_SETUP.md#2-create-your-own-ntfy-topic). It prints the new
+topic locally and sends a test; subscribe and test again to verify receipt.
 
-```powershell
-py -3 .\arpej_checker.py
+## Choose what to watch
+
+The search starts at **[ARPEJ's residence finder](https://www.arpej.fr/fr/nos-residences/)**.
+Choose your cities and include full residences, then copy the resulting search URL.
+The helper translates the city IDs into a list of residences:
+
+```sh
+python configure_residences.py "https://www.arpej.fr/fr/nos-residences/?related_city=52726&show_if_full=true"
 ```
 
-À chaque passage, le programme affiche les huit résidences et leur nombre de
-logements disponibles. Il conserve également :
+It prints IDs, names, cities and current availability without changing anything.
+Choose IDs from that output, then save, for example:
 
-- `data/arpej_history.sqlite3` : historique complet des contrôles ;
-- `data/arpej_checker.log` : journal technique rotatif ;
-- `data/availability_alerts.log` : notifications de disponibilité générées.
-
-Sur GitHub Actions, le journal de chaque passage est également ajouté au fichier
-[`arpej_checker.log`](arpej_checker.log), directement consultable dans le dépôt.
-Chaque exécution reste aussi visible dans l'onglet **Actions** avec une copie du
-journal téléchargeable pendant 30 jours.
-
-Une erreur réseau ou un changement de structure de l'API est enregistré comme une
-erreur, jamais comme une absence de logement.
-
-## Notification mobile active avec ntfy
-
-Cette installation utilise actuellement ntfy, car le réseau local bloque les
-connexions vers l'API Telegram. Le sujet privé est conservé dans `secrets.json` et
-les alertes sont envoyées avec une priorité élevée.
-
-Pour créer ou retester le sujet :
-
-```powershell
-wsl.exe --cd C:\Users\DCTH3282\ARPEJ python3 ./setup_ntfy.py
+```sh
+python configure_residences.py "https://www.arpej.fr/fr/nos-residences/?related_city=52726&show_if_full=true" --residence-ids 61037 --write
 ```
 
-La commande affiche une URL web et un lien pour l'application mobile ntfy. Le nom du
-sujet doit être traité comme un secret : toute personne qui le connaît peut lire ou
-publier des messages sur ce sujet public.
+This example selects Claudie Haigneré in Palaiseau. Availability is live and can
+change. Omit `--residence-ids` to select **all residences returned at setup time**.
+New residences are not added automatically; rerun the helper to include them.
+Full instructions, multiple-city examples and manual configuration are in
+[docs/RESIDENCES.md](docs/RESIDENCES.md).
 
-## Notification Telegram facultative
+The repository's default `config.json` retains the original eight residences:
+Charles Frederick Worth, Louis Blériot, Raymond Aron, Guy de Maupassant,
+Louis Faure-Dujarric, Jacques-Henri Lartigue, Neuilly-Roule and Chanzy.
+These are examples, not a limit of eight. Only the IDs you select are monitored.
 
-Il n'est pas nécessaire de communiquer un numéro de téléphone au programme. Telegram
-utilise un bot, son token secret et l'identifiant numérique du chat destinataire.
+## What happens on each check
 
-1. Dans Telegram, ouvrir le bot officiel `@BotFather`.
-2. Lui envoyer `/newbot` et suivre ses instructions.
-3. Copier le token qu'il fournit, sans le communiquer ni l'ajouter dans Git.
-4. Dans PowerShell, lancer l'assistant :
+The script queries the public JSON API used by ARPEJ's website:
+`https://www.arpej.fr/wp-json/sn/residences`. It reads each residence's
+`extra_data.available_rooms`; Selenium and browser automation are unnecessary.
 
-```powershell
-cd C:\Users\DCTH3282\ARPEJ
-.\setup_telegram.ps1
-```
+- At least one selected residence has availability: send an ntfy alert with its
+  exact name, city, available-unit count and direct link. An alert is sent on
+  **each successful check** while availability remains, even if unchanged.
+- All selected residences are full: log the result, send no alert.
+- A selected residence disappears, the response changes, the network fails, or
+  sending an alert fails: report an error rather than claim there is no availability.
 
-Le token est demandé avec une saisie masquée. L'assistant demande ensuite d'envoyer
-`/start` au nouveau bot, trouve le chat ID et envoie immédiatement une notification
-de test. Les deux valeurs sont enregistrées dans `secrets.json`, un fichier local
-explicitement exclu de Git. Il ne faut ni publier ce fichier, ni envoyer son contenu
-dans une conversation.
+`--test-notification` is the explicit exception: it sends a test without checking
+availability. The count is whatever ARPEJ publishes; it does not describe an
+individual room's rent, size or eligibility, or guarantee that you can book it.
 
-Pour tester à nouveau plus tard :
+## Automatic execution and history
 
-```powershell
-wsl.exe --cd C:\Users\DCTH3282\ARPEJ python3 ./arpej_checker.py --test-notification
-```
+The automatic workflow requests a start every five minutes, offset from the top
+of the hour. Its UTC window covers the configured default hours in both summer
+and winter. The script checks the local Paris time and allows one successful
+check per clock hour between **08:00 and 18:59 inclusive**, every day.
 
-## Notification webhook facultative
+`scheduler_state.json` records the successful hour. Later starts in that hour
+skip the ARPEJ request, notifications and journal commit. Failed checks leave the
+hour open for retries. A manual run with `--force` deliberately bypasses the
+active-hours filter and does not acquire the hourly lock.
 
-Sans configuration, une alerte apparaît dans la sortie et dans
-`data/availability_alerts.log`. Pour recevoir le même message dans Discord, Slack ou
-un service compatible avec les webhooks JSON, ajouter la clé suivante à
-`secrets.json` :
+GitHub schedules can be delayed or dropped. This is a personal monitoring tool,
+not a guarantee of eleven checks every day. See the scheduling limitations and
+troubleshooting in [GITHUB_SETUP.md](GITHUB_SETUP.md).
 
-```json
-{
-  "webhook_url": "https://exemple-du-service/webhook/..."
-}
-```
+| File / location | Purpose |
+| --- | --- |
+| `config.json` | Your cities, exact residence IDs and active hours; safe to commit |
+| `arpej_checker.log` | Journal published by GitHub Actions; readable in the repository |
+| `scheduler_state.json` | Last successful automatic-check hour |
+| Actions tab | Run results and downloadable per-run logs (30-day retention) |
+| `data/` | Local logs and SQLite history; excluded from Git |
+| `secrets.json` | Local ntfy URL; excluded from Git |
 
-Ne jamais placer l'URL secrète du webhook dans `config.json` ou dans Git. Les
-variables d'environnement Linux restent également acceptées pour une utilisation
-avancée.
+GitHub runners are temporary: the SQLite database is not preserved across runs.
+The root journal and scheduler state are preserved through commits. A fork starts
+with the upstream journal/state; those are historical records, not your own checks.
+Avoid sharing Actions logs or screenshots from `setup_ntfy.py` that contain a topic.
 
-À chaque contrôle, une notification est envoyée si au moins un logement est
-disponible, même si la même disponibilité était déjà présente au contrôle précédent.
-Elle indique le nom exact de la résidence, la ville, le nombre de logements et le
-lien direct. Lorsqu'aucun logement n'est disponible, aucune notification distante
-n'est envoyée et cette décision est inscrite explicitement dans le journal.
+## Local Windows scheduling (optional)
 
-Le workflow GitHub utilise le fuseau `Europe/Paris` pour l'heure affichée et pour
-filtrer la plage active. Comme le workflow Snake du profil, il demande un
-déclenchement à chaque minute de la plage UTC couverte. GitHub applique néanmoins
-sa fréquence et sa disponibilité propres. Dès que le premier contrôle de l'heure réussit,
-`scheduler_state.json` verrouille ce créneau : les déclenchements suivants terminent
-avant le contrôle, sans interroger ARPEJ, envoyer de notification, modifier le
-journal ou créer un commit. Un contrôle en échec ne pose pas le verrou, afin que la
-tentative suivante puisse réessayer.
-
-## Planification de 08h00 à 18h00 sur Windows
-
-Ouvrir PowerShell dans le dossier et exécuter :
+If you prefer running on your own PC, open PowerShell in the project directory:
 
 ```powershell
 .\install_hourly_task.ps1
-```
-
-Le script crée la tâche `ARPEJ - Verification des disponibilites`. Elle s'exécute
-tous les jours à 08h00, 09h00, puis chaque heure jusqu'à 18h00 inclus. Les exécutions
-simultanées sont interdites et chaque contrôle est limité à cinq minutes.
-
-La tâche ne garde pas Python actif entre deux passages. Pour la consulter, la mettre
-en pause, la réactiver ou lancer un contrôle immédiatement :
-
-```powershell
 .\manage_task.ps1 status
 .\manage_task.ps1 pause
 .\manage_task.ps1 resume
 .\manage_task.ps1 run
 ```
 
-La commande `run` force un contrôle immédiat, même avant 08h00 ou après 18h00. Le
-checker possède aussi une protection horaire : un déclenchement automatique rattrapé
-après 18h00 est ignoré et inscrit dans le journal.
-
-Pour retirer la tâche ultérieurement :
+The Windows installer schedules 08:00–18:00 hourly, in the PC's local time. Your PC
+must be on and connected; the session may be locked. If you change `active_hours`
+in `config.json`, also adjust the hours in `install_hourly_task.ps1` and reinstall.
+Use one scheduler for your copy to avoid duplicate alerts. To remove the local task:
 
 ```powershell
 Unregister-ScheduledTask -TaskName "ARPEJ - Verification des disponibilites"
 ```
 
-Le PC doit être allumé, connecté à Internet et la session Windows de l'utilisateur
-doit rester ouverte (elle peut être verrouillée). Le réglage `StartWhenAvailable`
-permet à Windows de rattraper une exécution manquée après une veille. La tâche est
-également autorisée à démarrer et à continuer lorsque le PC fonctionne sur batterie.
+## Development and reuse
 
-## Tests
-
-```powershell
-wsl.exe --cd C:\Users\DCTH3282\ARPEJ python3 -m unittest discover -s tests -v
+```sh
+python -m unittest discover -s tests -v
 ```
+
+Tests use mocked network responses and never send real notifications. GitHub runs
+them on code pushes and pull requests. [docs/REVIEW.md](docs/REVIEW.md) explains
+the reviewed guarantees, limitations and where to change the code for another
+housing operator. Other ARPEJ residences use configuration; **other websites
+require an implementation change**, not just a replacement URL.
+
+Shared under the [MIT license](LICENSE).

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -28,7 +29,6 @@ from arpej_checker import (  # noqa: E402
     run_once_per_hour,
     send_configured_notifications,
     send_ntfy,
-    send_telegram,
     validate_expected_residences,
 )
 
@@ -46,9 +46,6 @@ class ArpejCheckerTests(unittest.TestCase):
             data_directory=Path("data"),
             secrets_file=Path("secrets.json"),
             ntfy_topic_url_environment_variable="ARPEJ_NTFY_TOPIC_URL",
-            webhook_url_environment_variable="ARPEJ_WEBHOOK_URL",
-            telegram_bot_token_environment_variable="ARPEJ_TELEGRAM_BOT_TOKEN",
-            telegram_chat_id_environment_variable="ARPEJ_TELEGRAM_CHAT_ID",
         )
 
     def test_build_api_url_keeps_every_city_id(self):
@@ -59,6 +56,8 @@ class ArpejCheckerTests(unittest.TestCase):
         self.assertIn("related_city%5B%5D=123", url)
         self.assertIn("related_city%5B%5D=456", url)
         self.assertIn("show_if_full=true", url)
+        self.assertNotIn("price_to", url)
+        self.assertNotIn("show_if_colocations", url)
 
     def test_parse_residences_extracts_available_rooms(self):
         payload = {
@@ -225,17 +224,6 @@ class ArpejCheckerTests(unittest.TestCase):
         self.assertFalse(should_check)
         self.assertIn("hors plage active", reason)
 
-    def test_send_telegram_uses_chat_id_and_message(self):
-        response = BytesIO(b'{"ok": true, "result": {"message_id": 1}}')
-        with patch("arpej_checker.urlopen", return_value=response) as mocked_open:
-            send_telegram("123456:secret-token", "987654", "Alerte test", 20)
-
-        request = mocked_open.call_args.args[0]
-        body = json.loads(request.data.decode("utf-8"))
-        self.assertEqual("987654", body["chat_id"])
-        self.assertEqual("Alerte test", body["text"])
-        self.assertIn("/sendMessage", request.full_url)
-
     def test_send_ntfy_posts_high_priority_message(self):
         response = BytesIO(b'{"id": "test"}')
         with patch("arpej_checker.urlopen", return_value=response) as mocked_open:
@@ -260,6 +248,72 @@ class ArpejCheckerTests(unittest.TestCase):
 
         self.assertEqual(("ntfy",), channels)
         mocked_send.assert_called_once_with(topic_url, "Test cloud", 20)
+
+    def test_missing_ntfy_configuration_fails_instead_of_losing_alert(self):
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("arpej_checker.load_notification_secrets", return_value={}),
+        ):
+            with self.assertRaises(CheckerError):
+                send_configured_notifications(self.config, "Test")
+
+    def test_environment_takes_priority_and_legacy_channels_are_ignored(self):
+        topic_url = "https://ntfy.sh/arpej-0123456789abcdefghijklmnop"
+        with (
+            patch.dict(os.environ, {"ARPEJ_NTFY_TOPIC_URL": topic_url}, clear=True),
+            patch("arpej_checker.load_notification_secrets", return_value={
+                "ntfy_topic_url": "https://ntfy.sh/another-long-topic-name",
+                "telegram_bot_token": "legacy-token",
+                "webhook_url": "https://example.test/legacy",
+            }),
+            patch("arpej_checker.send_ntfy") as mocked_send,
+        ):
+            self.assertEqual(("ntfy",), send_configured_notifications(self.config, "Test"))
+        mocked_send.assert_called_once_with(topic_url, "Test", 20)
+
+    def test_ntfy_failure_does_not_expose_topic_in_error(self):
+        topic_url = "https://ntfy.sh/arpej-0123456789abcdefghijklmnop"
+        with patch("arpej_checker.urlopen", side_effect=OSError(topic_url)):
+            with self.assertRaises(CheckerError) as error:
+                send_ntfy(topic_url, "Test", 20)
+        self.assertNotIn(topic_url, str(error.exception))
+
+    def test_only_selected_residences_are_recorded_and_notified(self):
+        for selected_rooms in (0, 2):
+            with self.subTest(selected_rooms=selected_rooms), tempfile.TemporaryDirectory() as directory:
+                config = replace(self.config, data_directory=Path(directory))
+                payload = {"residences": [
+                    {"ID": 1, "title": "Selected", "extra_data": {"city": "Paris", "available_rooms": selected_rooms}},
+                    {"ID": 2, "title": "Unselected", "extra_data": {"city": "Paris", "available_rooms": 10}},
+                ]}
+                with (
+                    patch("arpej_checker.fetch_payload", return_value=payload),
+                    patch("arpej_checker.send_configured_notifications", return_value=("ntfy",)) as notify,
+                ):
+                    self.assertEqual(0, run(config, Mock()))
+                if selected_rooms:
+                    notify.assert_called_once()
+                    self.assertIn("Selected", notify.call_args.args[1])
+                    self.assertNotIn("Unselected", notify.call_args.args[1])
+                else:
+                    notify.assert_not_called()
+                with sqlite3.connect(Path(directory) / "arpej_history.sqlite3") as connection:
+                    ids = connection.execute("SELECT residence_id FROM availability_history").fetchall()
+                self.assertEqual([(1,)], ids)
+
+    def test_notification_failure_keeps_hour_open_for_retry(self):
+        payload = {"residences": [
+            {"ID": 1, "extra_data": {"city": "Paris", "available_rooms": 1}},
+        ]}
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(self.config, data_directory=Path(directory))
+            state = Path(directory) / "scheduler_state.json"
+            with (
+                patch("arpej_checker.fetch_payload", return_value=payload),
+                patch("arpej_checker.send_configured_notifications", side_effect=CheckerError("ntfy unavailable")),
+            ):
+                self.assertEqual(1, run_once_per_hour(config, Mock(), state))
+            self.assertFalse(state.exists())
 
 
 
